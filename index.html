@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MotionDrop Visualizer — Experimental Audio Animations</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Bebas+Neue&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #060608;
+            --accent: #E8FF47;
+            --text: #F2F2F0;
+            --muted: #868C97;
+            --surface: #10121A;
+            --font-hero: 'Bebas Neue', sans-serif;
+            --font-body: 'Syne', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            overflow: hidden;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .ui-overlay {
+            position: relative;
+            z-index: 10;
+            padding: 2rem;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .logo {
+            font-family: var(--font-hero);
+            font-size: 2.5rem;
+            letter-spacing: 0.05em;
+        }
+
+        .logo span {
+            color: var(--accent);
+        }
+
+        .controls {
+            pointer-events: auto;
+            background: rgba(16, 18, 26, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .btn {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 0.8rem 1.2rem;
+            font-family: var(--font-body);
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover {
+            transform: scale(1.02);
+            background: #f2ff6e;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        select, input[type="range"] {
+            background: var(--bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text);
+            padding: 0.5rem;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .footer {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        #start-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-family: var(--font-hero);
+            font-size: 5rem;
+            line-height: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-overlay">
+        <h1 class="hero-title">SOUND<br><span style="color:var(--accent)">MOTION</span></h1>
+        <p style="color:var(--muted); max-width: 400px;">Experimental code-based animations running to the music of your environment.</p>
+        <button class="btn" id="start-btn">Start Visualizer</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="ui-overlay">
+        <div class="header">
+            <div class="logo">SOUND<span>MOTION</span></div>
+            <div class="controls">
+                <div class="control-group">
+                    <label>Visual Mode</label>
+                    <select id="mode-select">
+                        <option value="orbit">Frequency Orbit</option>
+                        <option value="neural">Neural Web</option>
+                        <option value="primal">Primal Wave</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Sensitivity</label>
+                    <input type="range" id="sensitivity" min="1" max="10" value="5">
+                </div>
+                <button class="btn btn-ghost" id="mic-toggle">Microphone: ON</button>
+                <div class="control-group">
+                  <label>Or upload a file</label>
+                  <input type="file" id="audio-upload" accept="audio/*">
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            Experimental Visualizer // Built with MotionDrop Design System
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startOverlay = document.getElementById('start-overlay');
+        const startBtn = document.getElementById('start-btn');
+        const modeSelect = document.getElementById('mode-select');
+        const sensitivityInput = document.getElementById('sensitivity');
+        const micToggle = document.getElementById('mic-toggle');
+        const audioUpload = document.getElementById('audio-upload');
+
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let source;
+        let isMic = true;
+        let animationId;
+        let micStream;
+
+        // Cached colors
+        const colors = {
+            accent: '#E8FF47',
+            blue: 'rgba(71, 207, 255, 0.5)'
+        };
+
+        function updateCachedColors() {
+            colors.accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+        }
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            const bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+        }
+
+        async function startMic() {
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                if (source) source.disconnect();
+                analyser.disconnect(); // Disconnect analyser from destination if it was connected
+                source = audioContext.createMediaStreamSource(micStream);
+                source.connect(analyser);
+                isMic = true;
+                micToggle.textContent = "Microphone: ON";
+            } catch (err) {
+                console.error("Error accessing microphone:", err);
+                alert("Could not access microphone.");
+            }
+        }
+
+        function stopMic() {
+            if (micStream) {
+                micStream.getTracks().forEach(track => track.stop());
+                micStream = null;
+            }
+            if (isMic && source) {
+                source.disconnect();
+                source = null;
+            }
+            isMic = false;
+            micToggle.textContent = "Microphone: OFF";
+        }
+
+        audioUpload.addEventListener('change', function() {
+            if (!audioContext) initAudio();
+            const files = this.files;
+            if (files.length === 0) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const audioData = e.target.result;
+                audioContext.decodeAudioData(audioData, function(buffer) {
+                    if (source) source.disconnect();
+                    source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(analyser);
+                    analyser.connect(audioContext.destination);
+                    source.start(0);
+                    isMic = false;
+                    micToggle.textContent = "Microphone: OFF";
+                });
+            };
+            reader.readAsArrayBuffer(files[0]);
+        });
+
+        micToggle.addEventListener('click', () => {
+            if (!audioContext) initAudio();
+            if (!isMic) {
+                startMic();
+            } else {
+                stopMic();
+            }
+        });
+
+        startBtn.addEventListener('click', () => {
+            updateCachedColors();
+            initAudio();
+            startMic();
+            startOverlay.style.display = 'none';
+            resize();
+            animate();
+        });
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resize);
+
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+
+            if (source) {
+                analyser.getByteFrequencyData(dataArray);
+            } else {
+                dataArray.fill(0);
+            }
+
+            ctx.fillStyle = 'rgba(6, 6, 8, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const mode = modeSelect.value;
+            const sensitivity = sensitivityInput.value / 5;
+
+            if (mode === 'orbit') {
+                drawOrbit(sensitivity);
+            } else if (mode === 'neural') {
+                drawNeural(sensitivity);
+            } else if (mode === 'primal') {
+                drawPrimal(sensitivity);
+            }
+        }
+
+        function drawOrbit(sensitivity) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(centerX, centerY) * 0.4;
+
+            ctx.lineWidth = 2;
+
+            for (let i = 0; i < dataArray.length; i++) {
+                const value = dataArray[i] * sensitivity;
+                const angle = (i / dataArray.length) * Math.PI * 2;
+
+                const x1 = centerX + Math.cos(angle) * radius;
+                const y1 = centerY + Math.sin(angle) * radius;
+                const x2 = centerX + Math.cos(angle) * (radius + value);
+                const y2 = centerY + Math.sin(angle) * (radius + value);
+
+                ctx.strokeStyle = `hsla(${200 + value}, 100%, 50%, 0.8)`;
+                if (i % 5 === 0) ctx.strokeStyle = colors.accent;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+
+        function drawPrimal(sensitivity) {
+            const width = canvas.width;
+            const height = canvas.height;
+            const sliceWidth = width / dataArray.length;
+            let x = 0;
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = colors.accent;
+            ctx.beginPath();
+
+            for (let i = 0; i < dataArray.length; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = (v * height / 2) * sensitivity;
+
+                if (i === 0) {
+                    ctx.moveTo(x, height / 2 + y);
+                } else {
+                    ctx.lineTo(x, height / 2 + y);
+                }
+
+                x += sliceWidth;
+            }
+
+            ctx.lineTo(width, height / 2);
+            ctx.stroke();
+
+            // Symmetrically draw bottom
+            x = 0;
+            ctx.strokeStyle = colors.blue;
+            ctx.beginPath();
+            for (let i = 0; i < dataArray.length; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = (v * height / 2) * sensitivity;
+
+                if (i === 0) {
+                    ctx.moveTo(x, height / 2 - y);
+                } else {
+                    ctx.lineTo(x, height / 2 - y);
+                }
+                x += sliceWidth;
+            }
+            ctx.stroke();
+        }
+
+        let particles = [];
+        function initNeural() {
+            particles = [];
+            for(let i=0; i<50; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2
+                });
+            }
+        }
+
+        function drawNeural(sensitivity) {
+            if (particles.length === 0) initNeural();
+
+            const avgAmplitude = dataArray.reduce((a,b) => a+b, 0) / dataArray.length;
+            const boost = (avgAmplitude / 255) * 10 * sensitivity;
+
+            ctx.fillStyle = colors.accent;
+            particles.forEach((p, i) => {
+                p.x += p.vx * (1 + boost);
+                p.y += p.vy * (1 + boost);
+
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2 + boost, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Connect particles
+                for (let j = i + 1; j < particles.length; j++) {
+                    const p2 = particles[j];
+                    const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+                    if (dist < 150) {
+                        ctx.strokeStyle = `rgba(232, 255, 71, ${1 - dist/150})`;
+                        ctx.lineWidth = (1 - dist/150) * 2;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
