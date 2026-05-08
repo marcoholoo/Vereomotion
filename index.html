@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Touch Music Maker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f0f12;
+            --surface-color: #1a1a24;
+            --accent-color: #ff3e00;
+            --record-color: #ff0000;
+            --text-color: #e0e0e0;
+            --pad-color: #2a2a3a;
+            --pad-active: #4a4a5a;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items:center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .transport {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            background: var(--surface-color);
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .btn {
+            background: var(--pad-color);
+            border: none;
+            color: var(--text-color);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            flex: 1;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn.recording {
+            color: var(--record-color);
+            box-shadow: 0 0 10px var(--record-color);
+        }
+
+        .btn#clear {
+            background: #3a2a2a;
+        }
+
+        .pad-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            background: var(--surface-color);
+            padding: 15px;
+            border-radius: 16px;
+        }
+
+        .pad {
+            aspect-ratio: 1 / 1;
+            background: var(--pad-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.2);
+            border-bottom: 4px solid rgba(0,0,0,0.3);
+        }
+
+        .pad.active {
+            background: var(--pad-active);
+            transform: translateY(2px);
+            border-bottom-width: 2px;
+        }
+
+        .pad-0, .pad-1, .pad-2, .pad-3 { border-top: 3px solid #ff3e00; }
+        .pad-4, .pad-5, .pad-6, .pad-7 { border-top: 3px solid #00d1ff; }
+        .pad-8, .pad-9, .pad-10, .pad-11 { border-top: 3px solid #00ff85; }
+        .pad-12, .pad-13, .pad-14, .pad-15 { border-top: 3px solid #ffea00; }
+
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: var(--surface-color);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-color);
+            transition: width 0.1s linear;
+        }
+
+        .status {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            height: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>BeatMaker</h1>
+            <div id="tempo-display">120 BPM</div>
+        </div>
+
+        <div class="progress-container">
+            <div class="progress-bar" id="progress"></div>
+        </div>
+
+        <div class="pad-grid" id="pads">
+            <!-- 16 pads -->
+            <div class="pad pad-0" data-index="0">BD</div>
+            <div class="pad pad-1" data-index="1">SD</div>
+            <div class="pad pad-2" data-index="2">HH</div>
+            <div class="pad pad-3" data-index="3">OH</div>
+            <div class="pad pad-4" data-index="4">B1</div>
+            <div class="pad pad-5" data-index="5">B2</div>
+            <div class="pad pad-6" data-index="6">B3</div>
+            <div class="pad pad-7" data-index="7">B4</div>
+            <div class="pad pad-8" data-index="8">L1</div>
+            <div class="pad pad-9" data-index="9">L2</div>
+            <div class="pad pad-10" data-index="10">L3</div>
+            <div class="pad pad-11" data-index="11">L4</div>
+            <div class="pad pad-12" data-index="12">S1</div>
+            <div class="pad pad-13" data-index="13">S2</div>
+            <div class="pad pad-14" data-index="14">S3</div>
+            <div class="pad pad-15" data-index="15">S4</div>
+        </div>
+
+        <div class="transport">
+            <button class="btn" id="record">Record</button>
+            <button class="btn" id="play">Play</button>
+            <button class="btn" id="stop">Stop</button>
+            <button class="btn" id="clear">Clear</button>
+        </div>
+
+        <div class="status" id="status">Tap to Start</div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
